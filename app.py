@@ -180,6 +180,10 @@ def estimate_seasonality_methods(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Compare common seasonal estimates for a known-period additive series."""
     work = data[["date", "observed", "seasonality"]].copy()
+    if "residual" in data.columns:
+        work["estimation_value"] = data["observed"] - data["residual"]
+    else:
+        work["estimation_value"] = data["observed"]
     period = min(max(2, int(period)), len(work))
     phase = pd.Series(np.arange(len(work)) % period, index=work.index, name="phase")
 
@@ -188,7 +192,7 @@ def estimate_seasonality_methods(
         trend_window -= 1
     trend_window = max(3, trend_window)
     trend_cycle = (
-        work["observed"]
+        work["estimation_value"]
         .rolling(
             window=trend_window,
             center=True,
@@ -198,11 +202,14 @@ def estimate_seasonality_methods(
         .interpolate(limit_direction="both")
     )
 
-    detrended = work["observed"] - trend_cycle
+    detrended = work["estimation_value"] - trend_cycle
+    actual_deviation = work["observed"] - trend_cycle
     phase_average = detrended.groupby(phase).mean().reindex(range(period), fill_value=0.0)
     phase_average = (phase_average - phase_average.mean()) * shrinkage
 
-    raw_average = (work["observed"] - work["observed"].mean()).groupby(phase).mean()
+    raw_average = (
+        work["estimation_value"] - work["estimation_value"].mean()
+    ).groupby(phase).mean()
     raw_average = raw_average.reindex(range(period), fill_value=0.0)
     raw_average = (raw_average - raw_average.mean()) * shrinkage
 
@@ -221,6 +228,7 @@ def estimate_seasonality_methods(
     known_pattern = known_pattern - known_pattern.mean()
 
     work["phase"] = phase
+    work["actual_deviation_with_residual"] = actual_deviation
     work["known_seasonality"] = work["seasonality"]
     work["detrended_phase_average"] = phase.map(phase_average).astype(float)
     work["raw_phase_average"] = phase.map(raw_average).astype(float)
@@ -947,7 +955,9 @@ with seasonality_estimation:
     st.subheader("Seasonality Estimation")
     st.write(
         "Seasonality estimators group observations by their position inside a "
-        "repeating cycle, then estimate the typical deviation for each phase."
+        "repeating cycle, then estimate the typical deviation for each phase. "
+        "The comparison deviation keeps residual noise visible, while the estimated "
+        "seasonal curves are derived from the residual-free synthetic signal."
     )
     st.latex(r"S_j = \operatorname{average}(y_t - \hat{C}_t)\quad\text{where }t\bmod m=j")
 
@@ -999,6 +1009,7 @@ with seasonality_estimation:
 
     seasonal_chart = seasonal_methods.set_index("date")[
         [
+            "actual_deviation_with_residual",
             "known_seasonality",
             "detrended_phase_average",
             "raw_phase_average",
@@ -1052,7 +1063,7 @@ with seasonality_estimation:
                     "typical_risk": [
                         "Needs a reasonable trend estimate.",
                         "Trend can leak into the seasonal pattern.",
-                        "Can overreact to recent noise or one-time events.",
+                        "Can overreact to recent one-time events.",
                     ],
                 }
             ),

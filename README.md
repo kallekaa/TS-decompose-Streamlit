@@ -10,6 +10,11 @@ values either by extending a smoothed trend-cycle or by fitting a linear
 regression line. The regression example intentionally leaves seasonality out so
 the level-plus-trend model is easier to inspect.
 
+The seasonality estimation lesson compares noisy actual deviations against
+estimated seasonal curves built from the residual-free synthetic signal, making
+it easier to see the seasonal pattern without hiding the residual noise in the
+observed values.
+
 The app also includes an STL decomposition tab powered by `statsmodels`. It lets
 you tune seasonal, trend, and low-pass smoothers, switch robust fitting on for
 outliers, compare residual diagnostics, and test how sensitive the fit is to the
